@@ -10,7 +10,7 @@
 //!
 //! Documentation for embeds can be found [here].
 //!
-//! [`ChannelId::send_message`]: ../model/struct.ChannelId.html#method.send_message
+//! [`ChannelId::send_message`]: ../model/id/struct.ChannelId.html#method.send_message
 //! [`CreateEmbed`]: struct.CreateEmbed.html
 //! [`ExecuteWebhook::embeds`]: struct.ExecuteWebhook.html#method.embeds
 //! [here]: https://discordapp.com/developers/docs/resources/channel#embed-object
@@ -35,8 +35,8 @@ use utils::Colour;
 /// Refer to the documentation for [`ChannelId::send_message`] for a very in-depth
 /// example on how to use this.
 ///
-/// [`ChannelId::send_message`]: ../model/struct.ChannelId.html#method.send_message
-/// [`Embed`]: ../model/struct.Embed.html
+/// [`ChannelId::send_message`]: ../model/id/struct.ChannelId.html#method.send_message
+/// [`Embed`]: ../model/channel/struct.Embed.html
 /// [`ExecuteWebhook::embeds`]: struct.ExecuteWebhook.html#method.embeds
 #[derive(Clone, Debug)]
 pub struct CreateEmbed(pub VecMap<&'static str, Value>);
@@ -164,26 +164,26 @@ impl CreateEmbed {
         CreateEmbed(self.0)
     }
 
-    /// Set the image associated with the embed. This only supports HTTP(S).
-    pub fn image(mut self, url: &str) -> Self {
-        let image = json!({
+    fn url_object(mut self, name: &'static str, url: &str) -> Self {
+        let obj = json!({
             "url": url.to_string()
         });
 
-        self.0.insert("image", image);
+        self.0.insert(name, obj);
 
         CreateEmbed(self.0)
     }
 
+    /// Set the image associated with the embed. This only supports HTTP(S).
+    #[inline]
+    pub fn image<S: AsRef<str>>(self, url: S) -> Self {
+        self.url_object("image", url.as_ref())
+    }
+
     /// Set the thumbnail of the embed. This only supports HTTP(S).
-    pub fn thumbnail(mut self, url: &str) -> Self {
-        let thumbnail = json!({
-            "url": url.to_string(),
-        });
-
-        self.0.insert("thumbnail", thumbnail);
-
-        CreateEmbed(self.0)
+    #[inline]
+    pub fn thumbnail<S: AsRef<str>>(self, url: S) -> Self {
+        self.url_object("thumbnail", url.as_ref())
     }
 
     /// Set the timestamp.
@@ -288,9 +288,9 @@ impl CreateEmbed {
     }
 
     /// Set the URL to direct to when clicking on the title.
-    pub fn url(mut self, url: &str) -> Self {
+    pub fn url<S: AsRef<str>>(mut self, url: S) -> Self {
         self.0
-            .insert("url", Value::String(url.to_string()));
+            .insert("url", Value::String(url.as_ref().to_string()));
 
         CreateEmbed(self.0)
     }
@@ -300,9 +300,9 @@ impl CreateEmbed {
     /// Note however, you have to be sure you set an attachment (with [`ChannelId::send_files`])
     /// with the provided filename. Or else this won't work.
     ///
-    /// [`ChannelId::send_files`]: ../model/struct.ChannelId.html#send_files
-    pub fn attachment(self, filename: &str) -> Self {
-        self.image(&format!("attachment://{}", filename))
+    /// [`ChannelId::send_files`]: ../model/id/struct.ChannelId.html#send_files
+    pub fn attachment<S: AsRef<str>>(self, filename: S) -> Self {
+        self.image(&format!("attachment://{}", filename.as_ref()))
     }
 }
 
@@ -388,7 +388,7 @@ impl From<Embed> for CreateEmbed {
 ///
 /// Requires that you specify a [`name`].
 ///
-/// [`Embed`]: ../model/struct.Embed.html
+/// [`Embed`]: ../model/channel/struct.Embed.html
 /// [`CreateEmbed::author`]: struct.CreateEmbed.html#method.author
 /// [`name`]: #method.name
 #[derive(Clone, Debug, Default)]
@@ -422,7 +422,7 @@ impl CreateEmbedAuthor {
 ///
 /// This does not require any field be set.
 ///
-/// [`Embed`]: ../model/struct.Embed.html
+/// [`Embed`]: ../model/channel/struct.Embed.html
 /// [`CreateEmbed::footer`]: struct.CreateEmbed.html#method.footer
 #[derive(Clone, Debug, Default)]
 pub struct CreateEmbedFooter(pub VecMap<&'static str, Value>);

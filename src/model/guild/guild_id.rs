@@ -178,7 +178,13 @@ impl GuildId {
     pub fn create_role<F: FnOnce(EditRole) -> EditRole>(&self, f: F) -> Result<Role> {
         let map = utils::vecmap_to_json_map(f(EditRole::default()).0);
 
-        http::create_role(self.0, &map)
+        let role = http::create_role(self.0, &map)?;
+
+        if let Some(position) = map.get("position").and_then(Value::as_u64) {
+            self.edit_role_position(role.id, position)?;
+        }
+
+        Ok(role)
     }
 
     /// Deletes the current guild if the current account is the owner of the
@@ -431,6 +437,42 @@ impl GuildId {
         });
 
         http::get_guild_prune_count(self.0, &map)
+    }
+
+    /// Re-orders the channels of the guild.
+    ///
+    /// Accepts an iterator of a tuple of the channel ID to modify and its new
+    /// position.
+    ///
+    /// Although not required, you should specify all channels' positions,
+    /// regardless of whether they were updated. Otherwise, positioning can
+    /// sometimes get weird.
+    pub fn reorder_channels<It>(&self, channels: It) -> Result<()>
+        where It: IntoIterator<Item = (ChannelId, u64)> {
+        let items = channels.into_iter().map(|(id, pos)| json!({
+            "id": id,
+            "position": pos,
+        })).collect();
+
+        http::edit_guild_channel_positions(self.0, &Value::Array(items))
+    }
+
+    /// Re-orders the roles of the guild.
+    ///
+    /// Accepts an iterator of a tuple of the role ID to modify and its new
+    /// position.
+    ///
+    /// Although not required, you should specify all roles' positions,
+    /// regardless of whether they were updated. Otherwise, positioning can
+    /// sometimes get weird.
+    pub fn reorder_roles<It>(&self, roles: It) -> Result<Vec<Role>>
+        where It: IntoIterator<Item = (RoleId, u64)> {
+        let items = roles.into_iter().map(|(id, pos)| json!({
+            "id": id,
+            "position": pos,
+        })).collect();
+
+        http::edit_role_positions(self.0, &Value::Array(items))
     }
 
     /// Returns the Id of the shard associated with the guild.

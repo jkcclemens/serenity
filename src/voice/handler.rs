@@ -2,9 +2,11 @@ use constants::VoiceOpCode;
 use gateway::InterMessage;
 use model::id::{ChannelId, GuildId, UserId};
 use model::voice::VoiceState;
+use parking_lot::Mutex;
+use std::sync::Arc;
 use std::sync::mpsc::{self, Sender as MpscSender};
 use super::connection_info::ConnectionInfo;
-use super::{AudioReceiver, AudioSource, Status as VoiceStatus, threading};
+use super::{Audio, AudioReceiver, AudioSource, Status as VoiceStatus, threading, LockedAudio};
 
 /// The handler is responsible for "handling" a single voice connection, acting
 /// as a clean API above the inner connection.
@@ -38,25 +40,16 @@ use super::{AudioReceiver, AudioSource, Status as VoiceStatus, threading};
 pub struct Handler {
     /// The ChannelId to be connected to, if any.
     ///
-    /// Note that when connected to a voice channel, while the `ChannelId` will
-    /// not be `None`, the [`guild_id`] can, in the event of [`Group`] or
-    /// 1-on-1 [`Call`]s.
-    ///
     /// **Note**: This _must not_ be manually mutated. Call [`switch_to`] to
     /// mutate this value.
     ///
-    /// [`Call`]: ../../model/struct.Call.html
-    /// [`Group`]: ../../model/struct.Group.html
+    /// [`Group`]: ../../model/channel/struct.Group.html
     /// [`guild`]: #structfield.guild
     /// [`switch_to`]: #method.switch_to
     pub channel_id: Option<ChannelId>,
     /// The voice server endpoint.
     pub endpoint: Option<String>,
-    /// The GuildId to be connected to, if any. Can be normally `None` in the
-    /// event of playing audio to a one-on-one [`Call`] or [`Group`].
-    ///
-    /// [`Call`]: ../../model/struct.Call.html
-    /// [`Group`]: ../../model/struct.Group.html
+    /// The Id of the guild to be connected to.
     pub guild_id: GuildId,
     /// Whether the current handler is set to deafen voice connections.
     ///
@@ -191,11 +184,6 @@ impl Handler {
     }
 
     /// Connect - or switch - to the given voice channel by its Id.
-    ///
-    /// **Note**: This is not necessary for [`Group`] or direct [call][`Call`]s.
-    ///
-    /// [`Call`]: ../../model/struct.Call.html
-    /// [`Group`]: ../../model/struct.Group.html
     pub fn join(&mut self, channel_id: ChannelId) {
         self.channel_id = Some(channel_id);
 
@@ -228,8 +216,8 @@ impl Handler {
     /// can pass in just a boxed receiver, and do not need to specify `Some`.
     ///
     /// Pass `None` to drop the current receiver, if one exists.
-    pub fn listen<O: Into<Option<Box<AudioReceiver>>>>(&mut self, receiver: O) {
-        self.send(VoiceStatus::SetReceiver(receiver.into()))
+    pub fn listen(&mut self, receiver: Option<Box<AudioReceiver>>) {
+        self.send(VoiceStatus::SetReceiver(receiver))
     }
 
     /// Sets whether the current connection is to be muted.
@@ -249,13 +237,35 @@ impl Handler {
         }
     }
 
-    /// Plays audio from a source. This can be a source created via
-    /// [`voice::ffmpeg`] or [`voice::ytdl`].
+    /// Plays audio from a source.
+    ///
+    /// This can be a source created via [`voice::ffmpeg`] or [`voice::ytdl`].
     ///
     /// [`voice::ffmpeg`]: fn.ffmpeg.html
     /// [`voice::ytdl`]: fn.ytdl.html
     pub fn play(&mut self, source: Box<AudioSource>) {
-        self.send(VoiceStatus::SetSender(Some(source)))
+        self.play_returning(source);
+    }
+
+    /// Plays audio from a source, returning the locked audio source.
+    pub fn play_returning(&mut self, source: Box<AudioSource>) -> LockedAudio {
+        let player = Arc::new(Mutex::new(Audio::new(source)));
+        self.send(VoiceStatus::AddSender(player.clone()));
+
+        player
+    }
+
+    /// Plays audio from a source.
+    ///
+    /// Unlike `play`, this stops all other sources attached
+    /// to the channel.
+    ///
+    /// [`play`]: #method.play
+    pub fn play_only(&mut self, source: Box<AudioSource>) -> LockedAudio {
+        let player = Arc::new(Mutex::new(Audio::new(source)));
+        self.send(VoiceStatus::SetSender(Some(player.clone())));
+
+        player
     }
 
     /// Stops playing audio from a source, if one is set.

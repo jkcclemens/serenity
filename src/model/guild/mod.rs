@@ -32,6 +32,8 @@ use builder::{EditGuild, EditMember, EditRole};
 use constants::LARGE_THRESHOLD;
 #[cfg(feature = "model")]
 use std;
+#[cfg(feature = "model")]
+use std::borrow::Cow;
 
 /// A representation of a banning of a user.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Hash, Serialize)]
@@ -663,11 +665,26 @@ impl Guild {
     /// Returns [`None`] if at least one of the given users' member instances
     /// is not present. Returns `None` if the users have the same hierarchy, as
     /// neither are greater than the other.
+    ///
+    /// If both user IDs are the same, `None` is returned. If one of the users
+    /// is the guild owner, their ID is returned.
     #[cfg(feature = "cache")]
     pub fn greater_member_hierarchy<T, U>(&self, lhs_id: T, rhs_id: U)
         -> Option<UserId> where T: Into<UserId>, U: Into<UserId> {
         let lhs_id = lhs_id.into();
         let rhs_id = rhs_id.into();
+
+        // Check that the IDs are the same. If they are, neither is greater.
+        if lhs_id == rhs_id {
+            return None;
+        }
+
+        // Check if either user is the guild owner.
+        if lhs_id == self.owner_id {
+            return Some(lhs_id);
+        } else if rhs_id == self.owner_id {
+            return Some(rhs_id);
+        }
 
         let lhs = self.members.get(&lhs_id)?
             .highest_role_info()
@@ -885,23 +902,23 @@ impl Guild {
                     let name_a = match a.nick {
                         Some(ref nick) => {
                             if contains_case_insensitive(&a.user.read().name[..], prefix) {
-                                a.user.read().name.clone()
+                                Cow::Owned(a.user.read().name.clone())
                             } else {
-                                nick.clone()
+                                Cow::Borrowed(nick)
                             }
                         },
-                        None => a.user.read().name.clone(),
+                        None => Cow::Owned(a.user.read().name.clone()),
                     };
 
                     let name_b = match b.nick {
                         Some(ref nick) => {
                             if contains_case_insensitive(&b.user.read().name[..], prefix) {
-                                b.user.read().name.clone()
+                                Cow::Owned(b.user.read().name.clone())
                             } else {
-                                nick.clone()
+                                Cow::Borrowed(nick)
                             }
                         },
-                        None => b.user.read().name.clone(),
+                        None => Cow::Owned(b.user.read().name.clone()),
                     };
 
                     closest_to_origin(prefix, &name_a[..], &name_b[..])
@@ -961,23 +978,23 @@ impl Guild {
                     let name_a = match a.nick {
                         Some(ref nick) => {
                             if contains_case_insensitive(&a.user.read().name[..], substring) {
-                                a.user.read().name.clone()
+                                Cow::Owned(a.user.read().name.clone())
                             } else {
-                                nick.clone()
+                                Cow::Borrowed(nick)
                             }
                         },
-                        None => a.user.read().name.clone(),
+                        None => Cow::Owned(a.user.read().name.clone()),
                     };
 
                     let name_b = match b.nick {
                         Some(ref nick) => {
                             if contains_case_insensitive(&b.user.read().name[..], substring) {
-                                b.user.read().name.clone()
+                                Cow::Owned(b.user.read().name.clone())
                             } else {
-                                nick.clone()
+                                Cow::Borrowed(nick)
                             }
                         },
-                        None => b.user.read().name.clone(),
+                        None => Cow::Owned(b.user.read().name.clone()),
                     };
 
                     closest_to_origin(substring, &name_a[..], &name_b[..])
@@ -1066,16 +1083,16 @@ impl Guild {
                 .sort_by(|a, b| {
                     let name_a = match a.nick {
                         Some(ref nick) => {
-                            nick.clone()
+                            Cow::Borrowed(nick)
                         },
-                        None => a.user.read().name.clone(),
+                        None => Cow::Owned(a.user.read().name.clone()),
                     };
 
                     let name_b = match b.nick {
                         Some(ref nick) => {
-                                nick.clone()
+                                Cow::Borrowed(nick)
                             },
-                        None => b.user.read().name.clone(),
+                        None => Cow::Owned(b.user.read().name.clone()),
                     };
 
                     closest_to_origin(substring, &name_a[..], &name_b[..])
@@ -1326,6 +1343,26 @@ impl Guild {
         }
 
         self.id.prune_count(days)
+    }
+
+    /// Re-orders the channels of the guild.
+    ///
+    /// Although not required, you should specify all channels' positions,
+    /// regardless of whether they were updated. Otherwise, positioning can
+    /// sometimes get weird.
+    pub fn reorder_channels<It>(&self, channels: It) -> Result<()>
+        where It: IntoIterator<Item = (ChannelId, u64)> {
+        self.id.reorder_channels(channels)
+    }
+
+    /// Re-orders the roles of the guild.
+    ///
+    /// Although not required, you should specify all roles' positions,
+    /// regardless of whether they were updated. Otherwise, positioning can
+    /// sometimes get weird.
+    pub fn reorder_roles<It>(&self, roles: It) -> Result<Vec<Role>>
+        where It: IntoIterator<Item = (RoleId, u64)> {
+        self.id.reorder_roles(roles)
     }
 
     /// Returns the Id of the shard associated with the guild.

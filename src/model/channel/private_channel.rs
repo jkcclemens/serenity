@@ -71,13 +71,16 @@ impl PrivateChannel {
     ///
     /// Requires the [Manage Messages] permission.
     ///
-    /// **Note**: This uses bulk delete endpoint which is not available
-    /// for user accounts.
-    ///
     /// **Note**: Messages that are older than 2 weeks can't be deleted using
     /// this method.
     ///
+    /// # Errors
+    ///
+    /// Returns [`ModelError::BulkDeleteAmount`] if an attempt was made to
+    /// delete either 0 or more than 100 messages.
+    ///
     /// [`Channel::delete_messages`]: enum.Channel.html#method.delete_messages
+    /// [`ModelError::BulkDeleteAmount`]: ../enum.ModelError.html#variant.BulkDeleteAmount
     /// [Manage Messages]: permissions/constant.MANAGE_MESSAGES.html
     #[inline]
     pub fn delete_messages<T: AsRef<MessageId>, It: IntoIterator<Item=T>>(&self, message_ids: It) -> Result<()> {
@@ -218,7 +221,7 @@ impl PrivateChannel {
     /// is over the above limit, containing the number of unicode code points
     /// over the limit.
     ///
-    /// [`ChannelId`]: ../model/struct.ChannelId.html
+    /// [`ChannelId`]: ../model/id/struct.ChannelId.html
     /// [`ModelError::MessageTooLong`]: enum.ModelError.html#variant.MessageTooLong
     #[inline]
     pub fn say<D: ::std::fmt::Display>(&self, content: D) -> Result<Message> { self.id.say(content) }

@@ -686,7 +686,7 @@ impl StandardFramework {
                 .or_insert_with(|| Arc::new(CommandGroup::default()));
 
             if let Some(ref mut group) = Arc::get_mut(ungrouped) {
-                let cmd = f(CreateCommand(CommandOptions::default(), FnOrCommand::Fn(|_, _, _| Ok(())))).finish();
+                let cmd = f(CreateCommand::default()).finish();
                 let name = command_name.to_string();
 
                 if let Some(ref prefix) = group.prefix {
@@ -947,6 +947,12 @@ impl Framework for StandardFramework {
                 for group in groups.values() {
                     let command_length = built.len();
 
+                    built = if self.configuration.case_insensitive {
+                        built.to_lowercase()
+                    } else {
+                        built
+                    };
+
                     let cmd = group.commands.get(&built);
 
                     if let Some(&CommandOrAlias::Alias(ref points_to)) = cmd {
@@ -963,17 +969,11 @@ impl Framework for StandardFramework {
                         built.clone()
                     };
 
-                    to_check = if self.configuration.case_insensitive {
-                        to_check.to_lowercase()
-                    } else {
-                        to_check
-                    };
-
                     let mut args = {
-                        let mut content = message.content.chars().skip(position).collect::<String>();
-                        content = content[command_length..].trim().to_string();
+                        let content = message.content.chars().skip(position).skip_while(|x| x.is_whitespace())
+                            .skip(command_length).collect::<String>();
 
-                        Args::new(&content, &self.configuration.delimiters)
+                        Args::new(&content.trim(), &self.configuration.delimiters)
                     };
 
                     let before = self.before.clone();
@@ -1009,6 +1009,7 @@ impl Framework for StandardFramework {
                     if let Some(&CommandOrAlias::Command(ref command)) =
                         group.commands.get(&to_check) {
                         let command = Arc::clone(command);
+
                         if let Some(error) = self.should_fail(
                             &mut context,
                             &message,

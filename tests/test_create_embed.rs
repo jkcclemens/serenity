@@ -6,7 +6,7 @@ extern crate serde_json;
 extern crate serenity;
 
 use serde_json::Value;
-use serenity::model::channel::{Embed, EmbedField, EmbedFooter, EmbedImage};
+use serenity::model::channel::{Embed, EmbedField, EmbedFooter, EmbedImage, EmbedVideo};
 use serenity::builder::CreateEmbed;
 use serenity::utils::{self, Colour};
 
@@ -45,7 +45,11 @@ fn test_from_embed() {
         timestamp: None,
         title: Some("hakase".to_string()),
         url: Some("https://i.imgur.com/XfWpfCV.gif".to_string()),
-        video: None,
+        video: Some(EmbedVideo {
+            height: 213,
+            url: "https://i.imgur.com/XfWpfCV.mp4".to_string(),
+            width: 224,
+        }),
     };
 
     let builder = CreateEmbed::from(embed)
